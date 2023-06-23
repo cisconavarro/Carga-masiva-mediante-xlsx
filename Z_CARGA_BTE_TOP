@@ -1,0 +1,32 @@
+*&---------------------------------------------------------------------*
+*& Include          ZFIBL002GAP039_CARGA_BTE_TOP
+*&---------------------------------------------------------------------*
+
+* *********************
+* TABLES DEFINITION
+* *********************
+TABLES:
+  sscrfields.
+
+***********************
+* CLASS DEFINITION
+***********************
+CLASS lcl_eti DEFINITION DEFERRED.
+CLASS lcl_event_handler DEFINITION DEFERRED.
+
+***********************
+* TYPES DEFINITION
+***********************
+
+*----------------------------------------------------------------------*
+*   P A R Á M E T R O S   D E  S E L E C C I Ó N                       *
+*----------------------------------------------------------------------*
+SELECTION-SCREEN FUNCTION KEY 1.           " Descarga plantilla
+
+SELECTION-SCREEN BEGIN OF BLOCK block_b1 WITH FRAME TITLE TEXT-b01.
+
+  PARAMETERS: p_bukrs TYPE bukrs DEFAULT TEXT-033, "U001
+              p_gsber TYPE gsber,
+              p_file  LIKE ibipparms-path. " Ruta de Archivo.
+
+SELECTION-SCREEN END OF BLOCK block_b1.
