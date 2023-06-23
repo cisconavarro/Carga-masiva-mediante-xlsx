@@ -1,0 +1,261 @@
+*&---------------------------------------------------------------------*
+*& Include          ZFIBL002GAP039_CARGA_BTE_F01
+*&---------------------------------------------------------------------*
+*&---------------------------------------------------------------------*
+*& Form complete_header
+*&---------------------------------------------------------------------*
+*& text
+*&---------------------------------------------------------------------*
+*&      --> ls_records
+*&      <-- ls_documentheader
+*&---------------------------------------------------------------------*
+FORM complete_header  USING    ls_records        TYPE lcl_eti=>ty_records
+                      CHANGING ls_documentheader TYPE bapiache09.
+
+  ls_documentheader = VALUE #( username   = sy-uname               " Usuario
+                               comp_code  = ls_records-bukrs       " Sociedad
+                               doc_date   = ls_records-bldat       " Fecha doc
+                               pstng_date = ls_records-budat       " Fecha cont
+                               fisc_year  = ls_records-budat+0(04) " Ejercicio
+                               doc_type   = ls_records-blart       " Clase doc
+                               header_txt = ls_records-bktxt ).    " Texto cab
+
+ENDFORM.
+*&---------------------------------------------------------------------*
+*& Form complete_accountpayable
+*&---------------------------------------------------------------------*
+*& text
+*&---------------------------------------------------------------------*
+*&      --> ls_doc_pos
+*&      --> ls_param
+*&      --> lv_vendor
+*&      --> lv_itemno_acc
+*&      --> ls_doc_header
+*&      <-- ls_accountpayable
+*&---------------------------------------------------------------------*
+FORM complete_accountpayable USING ls_doc_pos        TYPE lcl_eti=>ty_records
+                                   ls_param          TYPE zfibl_param_bte
+                                   lv_vendor         TYPE any
+                                   lv_itemno_acc     TYPE posnr_acc
+                                   ls_doc_header     TYPE lcl_eti=>ty_records
+                          CHANGING ls_accountpayable TYPE bapiacap09.
+
+  ls_accountpayable-itemno_acc      = lv_itemno_acc.       " Pos
+  ls_accountpayable-vendor_no       = CONV #( lv_vendor ). " Proveedor
+  ls_accountpayable-gl_account      = ls_param-hkont.      " Cuenta Divergente
+  ls_accountpayable-pmnttrms        = ls_param-zterm.      " Condición de pago
+  ls_accountpayable-bus_area        = ls_doc_header-gsber. " División
+  ls_accountpayable-pymt_meth       = ls_doc_header-zlsch. " Vía de pago
+  ls_accountpayable-bank_id         = ls_doc_header-hbkid. " Banco propio
+  ls_accountpayable-housebankacctid = ls_doc_header-hktid. " ID de banco
+  ls_accountpayable-alloc_nmbr      = ls_doc_header-zuonr. " Asignación
+  ls_accountpayable-item_text       = ls_doc_pos-sgtxt.    " Texto
+
+ENDFORM.
+*&---------------------------------------------------------------------*
+*& Form complete_accountgl
+*&---------------------------------------------------------------------*
+*& text
+*&---------------------------------------------------------------------*
+*&      --> ls_doc_pos
+*&      --> lv_itemno_acc
+*&      --> ls_doc_header
+*&      <-- ls_accountgl
+*&---------------------------------------------------------------------*
+FORM complete_accountgl USING ls_doc_pos    TYPE lcl_eti=>ty_records
+                              lv_itemno_acc TYPE posnr_acc
+                              ls_doc_header TYPE lcl_eti=>ty_records
+                     CHANGING ls_accountgl  TYPE bapiacgl09.
+
+  DATA(lv_pos) = lv_itemno_acc.
+  ADD 1 TO lv_pos.
+
+  ls_accountgl-itemno_acc  = lv_pos.              " Pos
+  ls_accountgl-gl_account  = ls_doc_pos-hkont.    " Cuenta de mayor
+  ls_accountgl-bus_area    = ls_doc_header-gsber. " División
+  ls_accountgl-alloc_nmbr  = ls_doc_header-zuonr. " Asignación
+  ls_accountgl-costcenter  = ls_doc_pos-kostl.    " Centro de costo
+  ls_accountgl-orderid     = ls_doc_pos-aufnr.    " Orden CO
+  IF ls_doc_pos-prctr NE '00000000'.
+    ls_accountgl-wbs_element = ls_doc_pos-prctr.    " Elemento PEP
+  ENDIF.
+  ls_accountgl-fund        = ls_doc_pos-geber.    " Fondo
+  ls_accountgl-item_text   = ls_doc_pos-sgtxt.    " Texto
+
+  CLEAR lv_pos.
+
+ENDFORM.
+*&---------------------------------------------------------------------*
+*& Form complete_currencyamount
+*&---------------------------------------------------------------------*
+*& text
+*&---------------------------------------------------------------------*
+*&      --> ls_doc_pos
+*&      --> lv_itemno_acc
+*&      --> ls_param
+*&      <-- ls_currencyamount
+*&---------------------------------------------------------------------*
+FORM complete_currencyamount  USING ls_doc_pos        TYPE lcl_eti=>ty_records
+                                    lv_itemno_acc     TYPE posnr_acc
+                                    ls_param          TYPE zfibl_param_bte
+                           CHANGING ls_currencyamount TYPE bapiaccr09.
+
+  DATA(lv_pos) = lv_itemno_acc.
+  ADD 1 TO lv_pos.
+
+  ls_currencyamount-itemno_acc = lv_pos.               " Pos
+  ls_currencyamount-currency   = ls_param-waers.       " Moneda
+  ls_currencyamount-amt_doccur = ls_doc_pos-importe_b. " Importe Bruto
+
+  CLEAR lv_pos.
+
+ENDFORM.
+*&---------------------------------------------------------------------*
+*& Form complete_currencyamount_neg
+*&---------------------------------------------------------------------*
+*& text
+*&---------------------------------------------------------------------*
+*&      --> vl_importe
+*&      --> ls_param
+*&      <-- ls_currencyamount
+*&---------------------------------------------------------------------*
+FORM complete_currencyamount_neg  USING vl_importe        TYPE dmbtr
+                                        ls_param          TYPE zfibl_param_bte
+                               CHANGING ls_currencyamount TYPE bapiaccr09.
+
+  DATA: lv_pos TYPE posnr_acc VALUE '00000001'.
+
+  ls_currencyamount-itemno_acc = lv_pos.                     " Pos
+  ls_currencyamount-currency   = ls_param-waers.             " Moneda
+  ls_currencyamount-amt_doccur = vl_importe * -1.            " Importe Bruto
+
+ENDFORM.
+*&---------------------------------------------------------------------*
+*& Form complete_accountwt
+*&---------------------------------------------------------------------*
+*& text
+*&---------------------------------------------------------------------*
+*&      --> ls_doc_pos
+*&      --> lv_itemno_acc
+*&      --> ls_accountwt
+*&---------------------------------------------------------------------*
+FORM complete_accountwt  USING ls_doc_pos    TYPE lcl_eti=>ty_records
+                               lv_itemno_acc TYPE posnr_acc
+                      CHANGING ls_accountwt  TYPE bapiacwt09.
+
+  ls_accountwt-itemno_acc = lv_itemno_acc.        " Pos
+  ls_accountwt-wt_type    = ls_doc_pos-witht.     " Tipo de retención
+  ls_accountwt-wt_code    = ls_doc_pos-wt_withcd. " Indicador de retención
+
+ENDFORM.
+*&---------------------------------------------------------------------*
+*& Form complete_log
+*&---------------------------------------------------------------------*
+*& text
+*&---------------------------------------------------------------------*
+*&      --> sl_return
+*&      --> lv_obj_key
+*&      <-- gt_log
+*&---------------------------------------------------------------------*
+FORM complete_log  USING    sl_return  TYPE bapiret2
+                            lv_obj_key TYPE awkey
+                            lv_stcd1   TYPE bu_id_number
+                   CHANGING lt_log     TYPE lcl_eti=>ty_t_log.
+
+  APPEND INITIAL LINE TO lt_log ASSIGNING FIELD-SYMBOL(<fs_log>).
+
+  CASE sl_return-type.
+    WHEN 'E'.
+
+      <fs_log>-icon = '@5C@'. "Red led
+
+      <fs_log>-msgid    = sl_return-id.
+      <fs_log>-msgty    = sl_return-type.
+      <fs_log>-msgno    = sl_return-log_no.
+      <fs_log>-message  = sl_return-message.
+      <fs_log>-msgv1    = sl_return-message_v1.
+      <fs_log>-msgv2    = sl_return-message_v2.
+      <fs_log>-msgv3    = sl_return-message_v3.
+      <fs_log>-msgv4    = sl_return-message_v4.
+      <fs_log>-belnr    = lv_obj_key+0(10).
+      <fs_log>-bukrs    = lv_obj_key+10(04).
+      <fs_log>-gjahr    = lv_obj_key+14(04).
+      <fs_log>-stcd1    = lv_stcd1.
+
+    WHEN 'S'.
+
+      <fs_log>-icon = '@5B@'. "Green led
+
+      IF sl_return-number EQ '605'.
+
+        <fs_log>-msgid    = sl_return-id.
+        <fs_log>-msgty    = sl_return-type.
+        <fs_log>-msgno    = sl_return-log_no.
+        <fs_log>-message  = sl_return-message.
+        <fs_log>-msgv1    = sl_return-message_v1.
+        <fs_log>-msgv2    = sl_return-message_v2.
+        <fs_log>-msgv3    = sl_return-message_v3.
+        <fs_log>-msgv4    = sl_return-message_v4.
+        <fs_log>-belnr    = lv_obj_key+0(10).
+        <fs_log>-bukrs    = lv_obj_key+10(04).
+        <fs_log>-gjahr    = lv_obj_key+14(04).
+        <fs_log>-stcd1    = lv_stcd1.
+
+      ENDIF.
+
+    WHEN OTHERS.
+  ENDCASE.
+
+ENDFORM.
+*&---------------------------------------------------------------------*
+*& Form determinate_key
+*&---------------------------------------------------------------------*
+*& text
+*&---------------------------------------------------------------------*
+*&      --> gt_log
+*&---------------------------------------------------------------------*
+FORM determinate_key USING lt_records TYPE lcl_eti=>ty_t_records.
+
+  DATA: lv_cont TYPE vbeln_va VALUE IS INITIAL.
+
+  LOOP AT lt_records ASSIGNING FIELD-SYMBOL(<fs_records>).
+
+    IF <fs_records>-tireg EQ 'C'.
+      ADD 1 TO lv_cont.
+      <fs_records>-clave = lv_cont.
+      SHIFT <fs_records>-clave RIGHT DELETING TRAILING space.
+      OVERLAY <fs_records>-clave WITH '0000000000'.
+      CONDENSE <fs_records>-clave NO-GAPS.
+    ENDIF.
+
+    IF <fs_records>-tireg EQ 'D'.
+      <fs_records>-clave = lv_cont.
+      SHIFT <fs_records>-clave RIGHT DELETING TRAILING space.
+      OVERLAY <fs_records>-clave WITH '0000000000'.
+      CONDENSE <fs_records>-clave NO-GAPS.
+    ENDIF.
+
+  ENDLOOP.
+
+ENDFORM.
+*&---------------------------------------------------------------------*
+*& Form modify_log_msg
+*&---------------------------------------------------------------------*
+*& text
+*&---------------------------------------------------------------------*
+*&      --> GT_LOG
+*&---------------------------------------------------------------------*
+FORM modify_log_msg USING lt_log TYPE lcl_eti=>ty_t_log.
+
+* Eliminamos las líneas vacías que trae la BAPI.
+  DELETE lt_log WHERE msgty IS INITIAL.
+
+* Eliminamos los mensajes de la clase de mensaje: "RW" de tipo "E"
+* ya que no son útiles para los usuarios
+  DELETE lt_log WHERE ( msgid EQ 'RW')
+                  AND ( msgty EQ 'E' ).
+
+* Eliminamos mensajes duplicados
+  DELETE ADJACENT DUPLICATES FROM lt_log COMPARING ALL FIELDS.
+
+ENDFORM.
