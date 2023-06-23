@@ -1,0 +1,117 @@
+*&---------------------------------------------------------------------*
+*& Report Z_CARGA_BTE
+*&---------------------------------------------------------------------*
+* Proyecto         : 
+* Requerimiento N°.: 
+* Programa         : 
+* Programa transac : 
+* Creado por       : 
+* Fecha creación   : 
+* Descripción      : 
+* Transporte       : 
+*&---------------------------------------------------------------------*
+* MODIFICATION LOG
+*&---------------------------------------------------------------------*
+* Modificado por  :
+* Requerimiento N°:
+* ID Cambio       :
+* Fecha           :
+* Descripción     :
+* Transporte      :
+*&---------------------------------------------------------------------*
+
+REPORT zfibl002gap039_carga_bte.
+
+***********************
+* INCLUDE DEFINITION
+***********************
+INCLUDE: zfibl002gap039_carga_bte_top, " Declaraciones generales
+         zfibl002gap039_carga_bte_f02, " Cl. procesamiento
+         zfibl002gap039_carga_bte_f01. " Subrutinas
+
+*----------------------------------------------------------------------*
+* I N I T I A L I Z A T I O N                                          *
+*----------------------------------------------------------------------*
+* Texto Botón FC01
+*----------------------------------------------------------------------*
+INITIALIZATION.
+
+  CONCATENATE icon_xls TEXT-026   "Descargar plantilla archivo de carga
+         INTO sscrfields-functxt_01.
+
+*----------------------------------------------------------------------*
+* A T  S E L E C T I O N  S C R E E N                                  *
+*----------------------------------------------------------------------*
+* Procesar ejecución
+*----------------------------------------------------------------------*
+AT SELECTION-SCREEN.
+
+  lcl_eti=>authority_check( ).
+
+  CASE sscrfields-ucomm.
+
+    WHEN 'FC01'.    "Descargar archivo de ejemplo
+      lcl_eti=>download_example( ).
+
+    WHEN 'ONLI'.    "Ejecutar Carga Masiva
+
+*     Validaciones de campo obligatorio. Sociedad
+      IF p_bukrs IS INITIAL.
+        MESSAGE e004(zfibl002gap039_bte) WITH TEXT-028.
+*       Complete todos los campos obligatorios &
+      ENDIF.
+
+*     Validaciones de campo obligatorio. División
+      IF p_gsber IS INITIAL.
+        MESSAGE e004(zfibl002gap039_bte) WITH TEXT-029.
+*       Complete todos los campos obligatorios &
+      ENDIF.
+
+*     Validaciones de campo obligatorio. Ruta del archivo
+      IF p_file IS INITIAL.
+        MESSAGE e004(zfibl002gap039_bte) WITH TEXT-027. " Ruta del archivo
+*       Complete todos los campos obligatorios &
+      ENDIF.
+
+    WHEN OTHERS.
+*     Do nothing
+  ENDCASE.
+
+*----------------------------------------------------------------------*
+* A T  S E L E C T I O N  S C R E E N  O N  V A L U E - R E Q U E S T  *
+*----------------------------------------------------------------------*
+* Fichero
+*----------------------------------------------------------------------*
+AT SELECTION-SCREEN ON VALUE-REQUEST FOR p_file.
+  lcl_eti=>get_filename( CHANGING cv_file = p_file ).
+
+*----------------------------------------------------------------------*
+* S T A R T  O F  S E L E C T I O N                                    *
+*----------------------------------------------------------------------*
+* Procesar archivo
+*----------------------------------------------------------------------*
+START-OF-SELECTION.
+  lcl_eti=>process_file( ).
+
+*----------------------------------------------------------------------*
+* E N D  O F  S E L E C T I O N                                        *
+*----------------------------------------------------------------------*
+* Ejecuta carga masiva
+*----------------------------------------------------------------------*
+END-OF-SELECTION.
+
+  IF lcl_eti=>gt_msg IS INITIAL.
+    " No existen errores de validación
+    lcl_eti=>bapi_document_post( ).
+  ELSE.
+    " Muestra errores de validaciones.
+    lcl_eti=>display_errors( it_msg = lcl_eti=>gt_msg ).
+  ENDIF.
+
+*----------------------------------------------------------------------*
+* E N D  O F  S E L E C T I O N                                        *
+*----------------------------------------------------------------------*
+* Display Log
+*----------------------------------------------------------------------*
+  lcl_eti=>display_alv( ).
+  " Muestra mensajes de la BAPI
