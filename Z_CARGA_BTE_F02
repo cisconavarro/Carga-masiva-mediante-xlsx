@@ -1,0 +1,1552 @@
+*&---------------------------------------------------------------------*
+*& Include          ZFIBL002GAP039_CARGA_BTE_F02
+*&---------------------------------------------------------------------*
+
+*----------------------------------------------------------------------*
+*       CLASS lcl_event_handler DEFINITION.
+*----------------------------------------------------------------------*
+*       (DTT_FNAVARRO)
+*----------------------------------------------------------------------*
+CLASS lcl_event_handler DEFINITION.
+
+  PUBLIC SECTION.
+
+    METHODS:
+      on_link_click FOR EVENT link_click OF cl_salv_events_table
+        IMPORTING row
+                  column.
+
+ENDCLASS. " lcl_event_handler
+
+*----------------------------------------------------------------------*
+*       CLASS lcl_eti DEFINITION
+*----------------------------------------------------------------------*
+*       (DTT_FNAVARRO)
+*----------------------------------------------------------------------*
+CLASS lcl_eti DEFINITION.
+
+  PUBLIC SECTION.
+
+    TYPES: BEGIN OF ty_records,
+
+             clave     TYPE vbeln_va,     "00 Clave para ordenar documentos
+             tireg     TYPE flag,         "01 Indicador Cabecera/Detalle
+             bukrs     TYPE bukrs,        "02 Sociedad
+             gsber     TYPE gsber,        "03 División
+             bldat     TYPE bldat,        "04 Fecha de documento
+             budat     TYPE budat,        "05 Fecha de contabilización
+             blart     TYPE blart,        "06 Clase de documento
+             bktxt     TYPE bktxt,        "07 Texto de cabecera
+             waers     TYPE waers,        "08 Moneda
+             stcd1     TYPE bu_id_number, "19 RUT
+             dzterm    TYPE dzterm,       "10 Condicion de pago
+             importe_p TYPE dmbtr,        "11 Importe a pagar
+             zlsch     TYPE schzw_bseg,   "12 Via de pago
+             hbkid     TYPE hbkid,        "13 Banco Propio
+             hktid     TYPE hktid,        "14 Id de cuenta
+             zuonr     TYPE dzuonr,       "15 Asignación
+             hkont     TYPE hkont,        "16 Cuenta de mayor gasto
+             witht     TYPE witht,        "17 Tipo de retención
+             wt_withcd TYPE wt_withcd,    "18 Indicador de retención
+             importe_b TYPE dmbtr,        "19 Importe bruto
+             importe_r TYPE dmbtr,        "20 Importe retención
+             kostl     TYPE kostl,        "21 Centro Costo
+             aufnr     TYPE aufnr,        "22 Orden CO
+             prctr     TYPE ps_posnr,     "23 Elemento PEP
+             geber     TYPE bp_geber,     "24 Fondo
+             sgtxt     TYPE sgtxt,        "25 Texto
+
+           END OF ty_records.
+    TYPES ty_t_records TYPE TABLE OF ty_records.
+
+    TYPES: BEGIN OF ty_archivo_datos,
+
+             tireg     TYPE string,       "01 Indicador Cabecera/Detalle
+             bukrs     TYPE string,       "02 Sociedad
+             gsber     TYPE string,       "03 División
+             bldat     TYPE string,       "04 Fecha de documento
+             budat     TYPE string,       "05 Fecha de contabilización
+             blart     TYPE string,       "06 Clase de documento
+             bktxt     TYPE string,       "07 Texto de cabecera
+             waers     TYPE string,       "08 Moneda
+             stcd1     TYPE string,       "19 RUT
+             dzterm    TYPE string,       "10 Condicion de pago
+             importe_p TYPE string,       "11 Importe a pagar
+             zlsch     TYPE string,       "12 Via de pago
+             hbkid     TYPE string,       "13 Banco Propio
+             hktid     TYPE string,       "14 Id de cuenta
+             zuonr     TYPE string,       "15 Asignación
+             hkont     TYPE string,       "16 Cuenta de mayor gasto
+             witht     TYPE string,       "17 Tipo de retención
+             wt_withcd TYPE string,       "18 Indicador de retención
+             importe_b TYPE string,       "19 Importe bruto
+             importe_r TYPE string,       "20 Importe retención
+             kostl     TYPE string,       "21 Centro Costo
+             aufnr     TYPE string,       "22 Orden CO
+             prctr     TYPE string,       "23 Elemento PEP
+             geber     TYPE string,       "24 Fondo
+             sgtxt     TYPE string,       "25 Texto
+
+           END OF ty_archivo_datos.
+
+    TYPES ty_t_archivo_datos TYPE STANDARD TABLE OF ty_archivo_datos.
+
+    TYPES: BEGIN OF ty_log,
+             icon    TYPE icon_d,
+             msgid   TYPE sy-msgid,
+             msgty   TYPE sy-msgty,
+             msgno   TYPE sy-msgno,
+             message TYPE bapi_msg,
+             msgv1   TYPE sy-msgv1,
+             msgv2   TYPE sy-msgv2,
+             msgv3   TYPE sy-msgv3,
+             msgv4   TYPE sy-msgv4,
+             stcd1   TYPE bu_id_number,
+             belnr   TYPE belnr_d,
+             bukrs   TYPE bukrs,
+             gjahr   TYPE gjahr,
+           END OF ty_log.
+    TYPES ty_t_log TYPE STANDARD TABLE OF ty_log WITH EMPTY KEY.
+
+    CONSTANTS: gc_e TYPE bapiret2-type VALUE 'E'.
+
+    CLASS-DATA:
+      gt_log     TYPE ty_t_log,
+      gt_records TYPE TABLE OF ty_records,
+      gt_msg     TYPE bapiret2_t.
+
+    CLASS-METHODS:
+
+      " 01. Obtiene ubicación de archivo
+      get_filename CHANGING cv_file LIKE p_file,
+
+      " 02. Procesa archivo
+      process_file,
+
+      " 04. Descarga plantilla excel
+      download_example,
+
+      " 05. Objetos de autorización
+      authority_check,
+
+      " 06. Archivo de carga
+      display_alv,
+
+      " 07. Ejecuta bapi
+      bapi_document_post,
+
+      " 08. Obtiene parametros
+      get_param EXPORTING es_param TYPE zfibl_param_bte,
+
+      " 09. Drill down
+      drill_down IMPORTING is_row TYPE ty_log,
+
+      " 10. Display previous errors
+      display_errors IMPORTING it_msg TYPE bapiret2_t,
+
+      " 11. Arma tabla de mensajes
+      build_msg IMPORTING iv_id         TYPE bapiret2-id
+                          iv_number     TYPE bapiret2-number
+                          iv_type       TYPE bapiret2-type
+                          iv_message_v1 TYPE bapiret2-message_v1
+                          iv_message_v2 TYPE bapiret2-message_v2
+                          iv_message_v3 TYPE bapiret2-message_v3
+                          iv_message_v4 TYPE bapiret2-message_v4
+                CHANGING  ct_msg        TYPE bapiret2_t.
+
+  PRIVATE SECTION.
+
+    TYPES: BEGIN OF ty_file_columns,
+             col_a TYPE string, "01
+             col_b TYPE string, "02
+             col_c TYPE string, "03
+             col_d TYPE string, "04
+             col_e TYPE string, "05
+             col_f TYPE string, "06
+             col_g TYPE string, "07
+             col_h TYPE string, "08
+             col_i TYPE string, "19
+             col_j TYPE string, "10
+             col_k TYPE string, "11
+             col_l TYPE string, "12
+             col_m TYPE string, "13
+             col_n TYPE string, "14
+             col_o TYPE string, "15
+             col_p TYPE string, "16
+             col_q TYPE string, "17
+             col_r TYPE string, "18
+             col_s TYPE string, "19
+             col_t TYPE string, "20
+             col_u TYPE string, "21
+             col_v TYPE string, "22
+             col_w TYPE string, "23
+             col_x TYPE string, "24
+             col_y TYPE string. "25
+    TYPES: END OF ty_file_columns.
+    TYPES ty_t_file_columns TYPE STANDARD TABLE OF ty_file_columns WITH EMPTY KEY.
+
+    CLASS-METHODS:
+
+      " 01. Carga el archivo
+      upload_local_file RETURNING VALUE(rt_data) TYPE ty_t_file_columns,
+
+      " 02. Tranfiere valores del archivo de carga
+      transfer_values IMPORTING it_data TYPE ty_t_file_columns,
+
+      " 03. Validar datos
+      validate_data CHANGING ct_data TYPE ty_t_records.
+
+ENDCLASS. " lcl_eti
+
+**----------------------------------------------------------------------*
+**       CLASS lcl_eti IMPLEMENTATION
+**----------------------------------------------------------------------*
+**       (DTT_FNAVARRO)
+**----------------------------------------------------------------------*
+CLASS lcl_eti IMPLEMENTATION.
+
+  METHOD get_filename.
+
+    DATA: tl_file_table TYPE filetable,
+          vl_rc         TYPE i.
+
+    CALL METHOD cl_gui_frontend_services=>file_open_dialog
+      EXPORTING
+        file_filter             = '(*.xlsx*)|*.xlsx*'
+      CHANGING
+        file_table              = tl_file_table
+        rc                      = vl_rc
+      EXCEPTIONS
+        file_open_dialog_failed = 1
+        cntl_error              = 2
+        error_no_gui            = 3
+        not_supported_by_gui    = 4
+        OTHERS                  = 5.
+    IF sy-subrc <> 0.
+      MESSAGE ID sy-msgid TYPE 'I' NUMBER sy-msgno
+            WITH sy-msgv1 sy-msgv2 sy-msgv3 sy-msgv4.
+
+    ELSEIF tl_file_table[] IS NOT INITIAL.
+      DATA(sl_file_table) = tl_file_table[ 1 ].
+      cv_file = sl_file_table-filename.
+    ENDIF.
+
+  ENDMETHOD. "get_filename.
+
+  METHOD upload_local_file.
+
+    DATA: lo_excel_ref TYPE REF TO cl_fdt_xl_spreadsheet.
+
+    DATA: lt_records       TYPE solix_tab,
+          lv_headerxstring TYPE xstring,
+          lv_filelength    TYPE i.
+
+    FIELD-SYMBOLS: <fs_field>          TYPE any,
+                   <fs_t_excel_header> TYPE STANDARD TABLE.
+
+    DATA: lv_filename TYPE string,
+          ls_archivo  TYPE ty_archivo_datos.
+
+*----------------------------------------------------------------------*
+
+    lv_filename = p_file.
+
+* Leemos el archivo
+    CALL METHOD cl_gui_frontend_services=>gui_upload(
+      EXPORTING
+        filename                = lv_filename
+        filetype                = 'BIN'
+      IMPORTING
+        filelength              = lv_filelength
+        header                  = lv_headerxstring
+      CHANGING
+        data_tab                = lt_records
+      EXCEPTIONS
+        file_open_error         = 1
+        file_read_error         = 2
+        no_batch                = 3
+        gui_refuse_filetransfer = 4
+        invalid_type            = 5
+        no_authority            = 6
+        unknown_error           = 7
+        bad_data_format         = 8
+        header_not_allowed      = 9
+        separator_not_allowed   = 10
+        header_too_long         = 11
+        unknown_dp_error        = 12
+        access_denied           = 13
+        dp_out_of_memory        = 14
+        disk_full               = 15
+        dp_timeout              = 16
+        not_supported_by_gui    = 17
+        error_no_gui            = 18
+        OTHERS                  = 19 ).
+    IF sy-subrc <> 0.
+
+      MESSAGE e003(zfibl002gap039_bte).
+
+    ELSE.
+
+*Se ejecuta la funcion que transforma el arcivo de binario a String
+      CALL FUNCTION 'SCMS_BINARY_TO_XSTRING'
+        EXPORTING
+          input_length = lv_filelength
+        IMPORTING
+          buffer       = lv_headerxstring
+        TABLES
+          binary_tab   = lt_records
+        EXCEPTIONS
+          failed       = 1
+          OTHERS       = 2.
+      IF sy-subrc EQ 0.
+
+        TRY.
+            lo_excel_ref = NEW  cl_fdt_xl_spreadsheet(  document_name = CONV #( p_file )
+                                                        xdocument     = lv_headerxstring ).
+          CATCH cx_fdt_excel_core INTO DATA(ol_excel_core).
+            DATA(vl_msg_e) = ol_excel_core->get_text( ) ##NEEDED.
+            MESSAGE s001(zfibl002gap039_bte) WITH vl_msg_e DISPLAY LIKE 'E'.
+        ENDTRY.
+
+*Se rescata la lista con las hojas de Excel
+        lo_excel_ref->if_fdt_doc_spreadsheet~get_worksheet_names( IMPORTING worksheet_names = DATA(lt_worksheets) ).
+
+        IF NOT lt_worksheets IS INITIAL.
+          READ TABLE lt_worksheets INTO DATA(lv_woksheetname) INDEX 1.  "Hoja Entrada Unica
+          IF sy-subrc EQ 0.
+            DATA(lo_data_ref) = lo_excel_ref->if_fdt_doc_spreadsheet~get_itab_from_worksheet( lv_woksheetname ).
+            ASSIGN lo_data_ref->* TO <fs_t_excel_header>.
+          ENDIF.
+        ENDIF.
+
+      ENDIF.
+
+    ENDIF.
+
+*Se llena la tabla de cabecera
+    IF <fs_t_excel_header> IS ASSIGNED.
+      TRY.
+
+          LOOP AT <fs_t_excel_header> ASSIGNING FIELD-SYMBOL(<sl_excel_header>) FROM 1.
+
+            DO.
+              ASSIGN COMPONENT sy-index OF STRUCTURE <sl_excel_header> TO <fs_field>.
+              IF sy-subrc NE 0 .
+                EXIT.
+              ELSE.
+
+                TRY.
+                    CASE sy-index.
+                      WHEN 1 .
+                        ls_archivo-tireg     = <fs_field>.   "01
+                      WHEN 2 .
+                        ls_archivo-bukrs     = <fs_field>.   "02
+                      WHEN 3 .
+                        ls_archivo-gsber     = <fs_field>.   "03
+                      WHEN 4 .
+                        ls_archivo-bldat     = <fs_field>.   "04
+                      WHEN 5 .
+                        ls_archivo-budat     = <fs_field>.   "05
+                      WHEN 6 .
+                        ls_archivo-blart     = <fs_field>.   "06
+                      WHEN 7 .
+                        ls_archivo-bktxt     = <fs_field>.   "07
+                      WHEN 8 .
+                        ls_archivo-waers     = <fs_field>.   "08
+                      WHEN 9.
+                        ls_archivo-stcd1     = <fs_field>.   "09
+                      WHEN 10.
+                        ls_archivo-dzterm    = <fs_field>.   "10
+                      WHEN 11.
+                        ls_archivo-importe_p = <fs_field>.   "11
+                      WHEN 12.
+                        ls_archivo-zlsch     = <fs_field>.   "12
+                      WHEN 13.
+                        ls_archivo-hbkid     = <fs_field>.   "13
+                      WHEN 14.
+                        ls_archivo-hktid     = <fs_field>.   "14
+                      WHEN 15.
+                        ls_archivo-zuonr     = <fs_field>.   "15
+                      WHEN 16.
+                        ls_archivo-hkont     = <fs_field>.   "16
+                      WHEN 17.
+                        ls_archivo-witht     = <fs_field>.   "17
+                      WHEN 18.
+                        ls_archivo-wt_withcd = <fs_field>.   "18
+                      WHEN 19.
+                        ls_archivo-importe_b = <fs_field>.   "19
+                      WHEN 20.
+                        ls_archivo-importe_r = <fs_field>.   "20
+                      WHEN 21.
+                        ls_archivo-kostl     = <fs_field>.   "21
+                      WHEN 22.
+                        ls_archivo-aufnr     = <fs_field>.   "22
+                      WHEN 23.
+                        ls_archivo-prctr     = <fs_field>.   "23
+                      WHEN 24.
+                        ls_archivo-geber     = <fs_field>.   "24
+                      WHEN 25.
+                        ls_archivo-sgtxt     = <fs_field>.   "25
+                      WHEN OTHERS.
+                    ENDCASE.
+
+                  CATCH cx_root INTO DATA(ol_root) ##CATCH_ALL.
+
+                    MESSAGE s001(zfibl002gap039_bte) WITH ol_root->get_text( ) DISPLAY LIKE 'E'.
+
+                ENDTRY.
+
+              ENDIF.
+
+            ENDDO.
+
+            IF ls_archivo IS NOT INITIAL.
+              rt_data = VALUE #( BASE rt_data ( ls_archivo ) ).
+            ENDIF.
+
+          ENDLOOP.
+
+        CATCH cx_sy_conversion_no_number INTO DATA(ol_conv).
+
+          MESSAGE s001(zfibl002gap039_bte) WITH ol_conv->get_text( ) DISPLAY LIKE 'E'.
+
+      ENDTRY.
+
+    ENDIF.
+
+  ENDMETHOD. "upload_local_file
+
+  METHOD process_file.
+
+    DATA(lt_data) = upload_local_file( ).
+
+    IF lt_data[] IS INITIAL.
+      MESSAGE s005(zfibl002gap039_bte).
+      "El archivo está vacío
+    ELSE.
+      transfer_values( EXPORTING it_data = lt_data ).
+
+      validate_data( CHANGING ct_data = gt_records ).
+
+    ENDIF.
+
+  ENDMETHOD. "process_file.
+
+  METHOD transfer_values.
+
+    DATA: lv_tireg TYPE c.
+
+    LOOP AT it_data ASSIGNING FIELD-SYMBOL(<sl_data>).
+
+      IF sy-tabix GE 2.
+
+        APPEND INITIAL LINE TO gt_records ASSIGNING FIELD-SYMBOL(<fs_records>).
+
+* Validamos formatos de los campos
+
+*       01 Indicador Cabecera/Detalle
+        CLEAR: lv_tireg.
+        lv_tireg = CONV #( <sl_data>-col_a ).
+        TRANSLATE lv_tireg TO UPPER CASE.
+        IF <sl_data>-col_a CO 'CD'.
+          <fs_records>-tireg      = <sl_data>-col_a.
+        ELSE.
+          MESSAGE s006(zfibl002gap039_bte). " Indicador no válido (C/D)
+          build_msg( EXPORTING iv_id         = sy-msgid
+                               iv_number     = sy-msgno
+                               iv_type       = gc_e
+                               iv_message_v1 = sy-msgv1
+                               iv_message_v2 = sy-msgv2
+                               iv_message_v3 = sy-msgv3
+                               iv_message_v4 = sy-msgv4
+                      CHANGING ct_msg        = gt_msg ).
+
+        ENDIF.
+
+*       02 Sociedad
+        <fs_records>-bukrs      = <sl_data>-col_b.
+
+*       03 División
+        <fs_records>-gsber      = <sl_data>-col_c.
+
+*       04 Fecha de documento
+        IF <sl_data>-col_d IS NOT INITIAL.
+
+          <fs_records>-bldat    = <sl_data>-col_d.
+          CALL FUNCTION 'DATE_CHECK_PLAUSIBILITY'
+            EXPORTING
+              date                      = <fs_records>-bldat
+            EXCEPTIONS
+              plausibility_check_failed = 1
+              OTHERS                    = 2.
+          IF sy-subrc NE 0.
+            MESSAGE s007(zfibl002gap039_bte).
+            build_msg( EXPORTING iv_id         = sy-msgid
+                                 iv_number     = sy-msgno
+                                 iv_type       = gc_e
+                                 iv_message_v1 = sy-msgv1
+                                 iv_message_v2 = sy-msgv2
+                                 iv_message_v3 = sy-msgv3
+                                 iv_message_v4 = sy-msgv4
+                        CHANGING ct_msg        = gt_msg ).
+
+          ENDIF.
+
+        ENDIF.
+
+*       05 Fecha de contabilización
+        IF <sl_data>-col_e IS NOT INITIAL.
+
+          <fs_records>-budat      = <sl_data>-col_e.
+          CALL FUNCTION 'DATE_CHECK_PLAUSIBILITY'
+            EXPORTING
+              date                      = <fs_records>-budat
+            EXCEPTIONS
+              plausibility_check_failed = 1
+              OTHERS                    = 2.
+          IF sy-subrc NE 0.
+            MESSAGE s007(zfibl002gap039_bte).
+            build_msg( EXPORTING iv_id         = sy-msgid
+                                 iv_number     = sy-msgno
+                                 iv_type       = gc_e
+                                 iv_message_v1 = sy-msgv1
+                                 iv_message_v2 = sy-msgv2
+                                 iv_message_v3 = sy-msgv3
+                                 iv_message_v4 = sy-msgv4
+                        CHANGING ct_msg        = gt_msg ).
+          ENDIF.
+
+        ENDIF.
+
+*       06 Clase de documento
+        <fs_records>-blart      = <sl_data>-col_f.
+
+*       07 Texto de cabecera
+        <fs_records>-bktxt      = <sl_data>-col_g.
+
+*       08 Moneda
+        <fs_records>-waers      = <sl_data>-col_h.
+
+*       19 RUT
+        <fs_records>-stcd1      = <sl_data>-col_i.
+
+*       10 Condicion de pago
+        <fs_records>-dzterm     = <sl_data>-col_j.
+
+*       11 Importe a pagar
+        <fs_records>-importe_p  = <sl_data>-col_k.
+
+*       12 Via de pago
+        <fs_records>-zlsch      = <sl_data>-col_l.
+
+*       13 Banco Propio
+        <fs_records>-hbkid      = <sl_data>-col_m.
+
+*       14 Id de cuenta
+        <fs_records>-hktid      = <sl_data>-col_n.
+
+*       15 Asignación
+        <fs_records>-zuonr      = <sl_data>-col_o.
+
+*       16 Cuenta de mayor gasto
+        <fs_records>-hkont      = <sl_data>-col_p.
+
+*       17 Tipo de retención
+        <fs_records>-witht      = <sl_data>-col_q.
+
+*       18 Indicador de retención
+        <fs_records>-wt_withcd  = <sl_data>-col_r.
+
+*       19 Importe bruto
+        <fs_records>-importe_b  = <sl_data>-col_s.
+
+*       20 Importe retención
+        <fs_records>-importe_r  = <sl_data>-col_t.
+
+*       21 Centro Costo
+        <fs_records>-kostl      = <sl_data>-col_u.
+
+*       22 Orden CO
+        <fs_records>-aufnr      = |{ <sl_data>-col_v ALPHA = IN }|.
+
+*       23 Elemento PEP
+        <fs_records>-prctr      = <sl_data>-col_w.
+
+*       24 Fondo
+        <fs_records>-geber      = <sl_data>-col_x.
+
+*       25 Texto
+        <fs_records>-sgtxt      = <sl_data>-col_y.
+
+      ENDIF.
+
+    ENDLOOP.
+
+  ENDMETHOD. " transfer_values.
+
+  METHOD download_example.
+
+    DATA: lv_filename    TYPE string,
+          lv_path        TYPE string,
+          lv_fullpath    TYPE string,
+          lv_user_action TYPE i.
+
+    DATA: lt_archivo TYPE ty_t_archivo_datos,
+          ls_archivo TYPE ty_archivo_datos.
+
+    DATA: lt_columns TYPE if_fdt_doc_spreadsheet=>t_column,
+          lv_header  TYPE ty_archivo_datos. " Structura de cabecera para generar archivo .xlsx
+
+    ls_archivo = VALUE #( tireg      = TEXT-001    " Indicador Cabecera/Detalle
+                          bukrs      = TEXT-002    " Sociedad
+                          gsber      = TEXT-003    " División
+                          bldat      = TEXT-004    " Fecha de documento
+                          budat      = TEXT-005    " Fecha de contabilización
+                          blart      = TEXT-006    " Clase de documento
+                          bktxt      = TEXT-007    " Texto de cabecera
+                          waers      = TEXT-008    " Moneda
+                          stcd1      = TEXT-009    " RUT
+                          dzterm     = TEXT-010    " Condicion de pago
+                          importe_p  = TEXT-011    " Importe a pagar
+                          zlsch      = TEXT-012    " Via de pago
+                          hbkid      = TEXT-013    " Banco Propio
+                          hktid      = TEXT-014    " Id de cuenta
+                          zuonr      = TEXT-015    " Asignación
+                          hkont      = TEXT-016    " Cuenta de mayor gasto
+                          witht      = TEXT-017    " Tipo de retención
+                          wt_withcd  = TEXT-018    " Indicador de retención
+                          importe_b  = TEXT-019    " Importe bruto
+                          importe_r  = TEXT-020    " Importe retención
+                          kostl      = TEXT-021    " Centro Costo
+                          aufnr      = TEXT-022    " Orden CO
+                          prctr      = TEXT-023    " Elemento PEP
+                          geber      = TEXT-024    " Fondo
+                          sgtxt      = TEXT-025 ). " Texto
+*[Importante]
+
+*   lt_archivo = VALUE #( BASE lt_archivo ( ls_archivo ) ). " Posiciones del archivo XLSX
+
+*   Se comenta la línea de posiciones debido a que solo queremos descargar la fila de cabecera. (Archivo de muestra)
+*   Si necesitaramos descargar las posiciones la tablar archivo debe ir con valores, representando cada posición.
+
+*[Importante]
+
+    TRY.
+
+        DATA(lo_desc) = CAST cl_abap_structdescr( cl_abap_structdescr=>describe_by_data( p_data = lv_header ) ).
+
+        LOOP AT lo_desc->get_components( ) ASSIGNING FIELD-SYMBOL(<fs_components>).
+          IF <fs_components> IS ASSIGNED.
+
+            IF <fs_components>-type->kind EQ cl_abap_structdescr=>kind_elem.
+              APPEND VALUE #( id           = sy-tabix             " ID de la columna
+                              name         = <fs_components>-name " Nombre de la columna
+                              display_name = <fs_components>-name "
+                              is_result    = abap_true
+                              type         = <fs_components>-type )
+                              TO lt_columns.
+
+            ENDIF.
+
+          ENDIF.
+
+        ENDLOOP.
+
+        TRY.
+            DATA(lv_bin_data) = cl_fdt_xl_spreadsheet=>if_fdt_doc_spreadsheet~create_document( columns      = lt_columns
+                                                                                               itab         = REF #( lt_archivo )
+                                                                                               iv_call_type = if_fdt_doc_spreadsheet=>gc_call_dec_table ).
+          CATCH cx_fdt_excel_core INTO DATA(lo_excel_core).
+
+        ENDTRY.
+
+        IF xstrlen( lv_bin_data ) GT 0.
+
+          CALL METHOD cl_gui_frontend_services=>file_save_dialog
+            EXPORTING
+              default_extension    = '.xlsx'
+              default_file_name    = 'PLANTILLA.xlsx'
+              file_filter          = '(*.xlsx)|*.xlsx'
+            CHANGING
+              filename             = lv_filename
+              path                 = lv_path
+              fullpath             = lv_fullpath
+              user_action          = lv_user_action
+            EXCEPTIONS
+              cntl_error           = 1
+              error_no_gui         = 2
+              not_supported_by_gui = 3
+              OTHERS               = 4.
+          IF sy-subrc NE 0.
+            MESSAGE ID sy-msgid TYPE 'I' NUMBER sy-msgno
+                  WITH sy-msgv1 sy-msgv2 sy-msgv3 sy-msgv4.
+
+          ELSEIF lv_user_action NE cl_gui_frontend_services=>action_cancel.
+
+            DATA(lt_raw_data) = cl_bcs_convert=>xstring_to_solix( iv_xstring = lv_bin_data ).
+
+            CALL METHOD cl_gui_frontend_services=>gui_download(
+              EXPORTING
+                filename                = lv_fullpath
+                filetype                = 'BIN'
+                bin_filesize            = xstrlen( lv_bin_data )
+              CHANGING
+                data_tab                = lt_raw_data
+              EXCEPTIONS
+                file_write_error        = 1
+                no_batch                = 2
+                gui_refuse_filetransfer = 3
+                invalid_type            = 4
+                no_authority            = 5
+                unknown_error           = 6
+                header_not_allowed      = 7
+                separator_not_allowed   = 8
+                filesize_not_allowed    = 9
+                header_too_long         = 10
+                dp_error_create         = 11
+                dp_error_send           = 12
+                dp_error_write          = 13
+                unknown_dp_error        = 14
+                access_denied           = 15
+                dp_out_of_memory        = 16
+                disk_full               = 17
+                dp_timeout              = 18
+                file_not_found          = 19
+                dataprovider_exception  = 20
+                control_flush_error     = 21
+                not_supported_by_gui    = 22
+                error_no_gui            = 23
+                OTHERS                  = 24 ).
+            IF sy-subrc NE 0.
+              MESSAGE ID sy-msgid TYPE sy-msgty NUMBER sy-msgno
+                WITH sy-msgv1 sy-msgv2 sy-msgv3 sy-msgv4.
+            ENDIF.
+
+          ENDIF.
+
+        ENDIF.
+
+      CATCH cx_root INTO DATA(ol_root).
+
+    ENDTRY.
+
+  ENDMETHOD. " download_example.
+
+  METHOD authority_check.
+
+    AUTHORITY-CHECK OBJECT 'F_BKPF_GSB'
+      ID 'GSBER' FIELD p_gsber
+      ID 'ACTVT' FIELD '03'.
+    IF sy-subrc NE 0.
+      MESSAGE e002(zfibl002gap039_bte) WITH p_gsber.
+      "No tiene autorización para la división &
+    ENDIF.
+
+  ENDMETHOD. " authority_check.
+
+  METHOD display_alv.
+
+    DATA: ls_layout_key    TYPE salv_s_layout_key,
+          lo_col_tab       TYPE REF TO cl_salv_column_table,
+          lo_event_handler TYPE REF TO lcl_event_handler.
+
+    IF gt_log[] IS NOT INITIAL.
+
+      PERFORM modify_log_msg USING gt_log.
+
+      TRY.
+          cl_salv_table=>factory( IMPORTING r_salv_table = DATA(lo_salv)
+                                   CHANGING t_table      = gt_log[]  ).
+
+          IF lo_salv IS BOUND.
+
+            lo_salv->get_display_settings( )->set_striped_pattern( if_salv_c_bool_sap=>true ).
+
+            " Selección
+            lo_salv->get_selections( )->set_selection_mode( value = if_salv_c_selection_mode=>single ).
+
+            " Set the ALV Toolbars / status GUI
+            lo_salv->set_screen_status( EXPORTING report        = sy-repid
+                                                  pfstatus      = 'STANDARD_FULLSCREEN' ##NO_TEXT
+                                                  set_functions = lo_salv->c_functions_all  ).
+
+            " Set the ALV Layouts
+            DATA(ol_layout_settings) = lo_salv->get_layout( ).
+            ls_layout_key-report = sy-repid.
+            ol_layout_settings->set_key( ls_layout_key ).
+            ol_layout_settings->set_save_restriction( if_salv_c_layout=>restrict_none ).
+
+            " Tratamiento columnas - Optimizar columnas ALV - size
+            DATA(ol_columns) = lo_salv->get_columns( ).
+            ol_columns->set_optimize( ).
+
+            " Tratamiento columnas - Icon
+            TRY.
+                lo_col_tab ?= ol_columns->get_column( 'ICON' ) ##NO_TEXT.
+                lo_col_tab->set_icon( if_salv_c_bool_sap=>true ).
+                lo_col_tab->set_alignment( if_salv_c_alignment=>centered ).
+                lo_col_tab->set_long_text( 'ID' ) ##NO_TEXT.
+
+              CATCH cx_salv_not_found INTO DATA(ol_not_found).
+                MESSAGE ol_not_found->get_text( ) TYPE 'S' DISPLAY LIKE 'E'.
+            ENDTRY.
+
+            " Habilita Drill-Down
+            TRY.
+                lo_col_tab ?= ol_columns->get_column( 'BELNR' ). ##NO_TEXT.
+                lo_col_tab->set_cell_type( if_salv_c_cell_type=>hotspot ).
+              CATCH cx_salv_not_found.
+                MESSAGE s010(zfibl002gap039_bte) DISPLAY LIKE 'W'.
+                "Navegación no disponible
+            ENDTRY.
+
+            " Evento para Drill-Down
+            lo_event_handler = NEW #(  ).
+            SET HANDLER lo_event_handler->on_link_click FOR lo_salv->get_event( ).
+
+            " Despliegue
+            lo_salv->display( ).
+
+          ENDIF.
+
+        CATCH cx_salv_msg INTO DATA(lo_salv_msg).
+          MESSAGE lo_salv_msg->get_text( ) TYPE 'S' DISPLAY LIKE 'E'.
+      ENDTRY.
+
+    ENDIF.
+
+  ENDMETHOD. " display_alv
+
+  METHOD validate_data.
+
+    DATA: lv_gsber TYPE gsber.
+
+*   Datos maestros RUT / proveedor o acreedor
+    SELECT bu~partner,
+           bu~type,
+           bu~idnumber,
+           lf~lifnr,
+           lf~witht,
+           lf~wt_withcd
+      FROM but0id AS bu
+      INNER JOIN lfbw AS lf
+        ON lf~lifnr EQ bu~partner
+      FOR ALL ENTRIES IN @ct_data
+      WHERE ( bu~idnumber EQ @ct_data-stcd1 )
+        AND ( bu~type     EQ @text-030
+         OR   bu~type     EQ @text-031 )
+        AND ( lf~bukrs    EQ @ct_data-bukrs )
+      INTO TABLE @DATA(lt_retencion).         "#EC CI_FAE_LINES_ENSURED
+
+*   Datos imputación: Centro de costo
+    SELECT FROM csks
+      FIELDS kostl,
+             gsber
+      FOR ALL ENTRIES IN @ct_data
+      WHERE ( kostl EQ @ct_data-kostl )
+        AND ( kokrs EQ @text-032 )
+      INTO TABLE @DATA(lt_ceco).              "#EC CI_FAE_LINES_ENSURED
+
+*   Datos imputación: Orden CO
+    SELECT FROM aufk
+      FIELDS aufnr,
+             gsber
+      FOR ALL ENTRIES IN @ct_data
+      WHERE ( aufnr EQ @ct_data-aufnr )
+        AND ( kokrs EQ @text-032 )
+      INTO TABLE @DATA(lt_orden).             "#EC CI_FAE_LINES_ENSURED
+
+*   Datos de imputación: Elemento pep
+    SELECT FROM prps
+      FIELDS pspnr,
+             pgsbr
+      FOR ALL ENTRIES IN @ct_data
+      WHERE ( pspnr EQ @ct_data-prctr )
+        AND ( pkokr EQ @text-032 )
+      INTO TABLE @DATA(lt_pep).               "#EC CI_FAE_LINES_ENSURED
+
+    LOOP AT ct_data ASSIGNING FIELD-SYMBOL(<fs_data>).
+
+      IF <fs_data>-tireg IS INITIAL.
+        MESSAGE s008(zfibl002gap039_bte) WITH TEXT-001. "TIREG
+        build_msg( EXPORTING iv_id         = sy-msgid
+                             iv_number     = sy-msgno
+                             iv_type       = gc_e
+                             iv_message_v1 = sy-msgv1
+                             iv_message_v2 = sy-msgv2
+                             iv_message_v3 = sy-msgv3
+                             iv_message_v4 = sy-msgv4
+                    CHANGING ct_msg        = gt_msg ).
+
+      ELSE.
+
+        CASE <fs_data>-tireg.
+
+          WHEN 'C'. " Cabecera
+
+            IF <fs_data>-bukrs IS INITIAL.
+              MESSAGE s008(zfibl002gap039_bte) WITH TEXT-002. "BUKRS
+              build_msg( EXPORTING iv_id         = sy-msgid
+                                   iv_number     = sy-msgno
+                                   iv_type       = gc_e
+                                   iv_message_v1 = sy-msgv1
+                                   iv_message_v2 = sy-msgv2
+                                   iv_message_v3 = sy-msgv3
+                                   iv_message_v4 = sy-msgv4
+                          CHANGING ct_msg        = gt_msg ).
+            ENDIF.
+
+            IF <fs_data>-gsber IS INITIAL.
+              MESSAGE s008(zfibl002gap039_bte) WITH TEXT-003. "GSBER
+              build_msg( EXPORTING iv_id         = sy-msgid
+                                   iv_number     = sy-msgno
+                                   iv_type       = gc_e
+                                   iv_message_v1 = sy-msgv1
+                                   iv_message_v2 = sy-msgv2
+                                   iv_message_v3 = sy-msgv3
+                                   iv_message_v4 = sy-msgv4
+                          CHANGING ct_msg        = gt_msg ).
+            ELSE.
+
+              IF p_gsber EQ <fs_data>-gsber.
+
+                AUTHORITY-CHECK OBJECT 'F_BKPF_GSB'
+                  ID 'GSBER' FIELD <fs_data>-gsber
+                  ID 'ACTVT' FIELD '03'.
+                IF sy-subrc NE 0.
+
+                  MESSAGE s002(zfibl002gap039_bte) WITH p_gsber.
+                  "No tiene autorización para la división &
+                  build_msg( EXPORTING iv_id         = sy-msgid
+                                       iv_number     = sy-msgno
+                                       iv_type       = gc_e
+                                       iv_message_v1 = sy-msgv1
+                                       iv_message_v2 = sy-msgv2
+                                       iv_message_v3 = sy-msgv3
+                                       iv_message_v4 = sy-msgv4
+                              CHANGING ct_msg        = gt_msg ).
+                ELSE.
+                  CLEAR: lv_gsber.
+                  lv_gsber = <fs_data>-gsber.
+                ENDIF.
+
+              ELSE.
+
+                MESSAGE s023(zfibl002gap039_bte) WITH p_gsber <fs_data>-gsber.
+                " La división seleccionada & es diferente del archivo de carga &
+                build_msg( EXPORTING iv_id         = sy-msgid
+                                     iv_number     = sy-msgno
+                                     iv_type       = gc_e
+                                     iv_message_v1 = sy-msgv1
+                                     iv_message_v2 = sy-msgv2
+                                     iv_message_v3 = sy-msgv3
+                                     iv_message_v4 = sy-msgv4
+                            CHANGING ct_msg        = gt_msg ).
+
+              ENDIF.
+
+            ENDIF.
+
+            IF <fs_data>-bldat IS INITIAL.
+              MESSAGE s008(zfibl002gap039_bte) WITH TEXT-004. "BLDAT
+              build_msg( EXPORTING iv_id         = sy-msgid
+                                   iv_number     = sy-msgno
+                                   iv_type       = gc_e
+                                   iv_message_v1 = sy-msgv1
+                                   iv_message_v2 = sy-msgv2
+                                   iv_message_v3 = sy-msgv3
+                                   iv_message_v4 = sy-msgv4
+                          CHANGING ct_msg        = gt_msg ).
+            ENDIF.
+
+            IF <fs_data>-budat IS INITIAL.
+              MESSAGE s008(zfibl002gap039_bte) WITH TEXT-005. "BUDAT
+              build_msg( EXPORTING iv_id         = sy-msgid
+                                   iv_number     = sy-msgno
+                                   iv_type       = gc_e
+                                   iv_message_v1 = sy-msgv1
+                                   iv_message_v2 = sy-msgv2
+                                   iv_message_v3 = sy-msgv3
+                                   iv_message_v4 = sy-msgv4
+                          CHANGING ct_msg        = gt_msg ).
+            ENDIF.
+
+            IF <fs_data>-blart IS INITIAL.
+              MESSAGE s008(zfibl002gap039_bte) WITH TEXT-006. "BLART
+              build_msg( EXPORTING iv_id         = sy-msgid
+                                   iv_number     = sy-msgno
+                                   iv_type       = gc_e
+                                   iv_message_v1 = sy-msgv1
+                                   iv_message_v2 = sy-msgv2
+                                   iv_message_v3 = sy-msgv3
+                                   iv_message_v4 = sy-msgv4
+                          CHANGING ct_msg        = gt_msg ).
+            ENDIF.
+
+            IF <fs_data>-bktxt IS INITIAL.
+              MESSAGE s008(zfibl002gap039_bte) WITH TEXT-007. "BKTXT
+              build_msg( EXPORTING iv_id         = sy-msgid
+                                   iv_number     = sy-msgno
+                                   iv_type       = gc_e
+                                   iv_message_v1 = sy-msgv1
+                                   iv_message_v2 = sy-msgv2
+                                   iv_message_v3 = sy-msgv3
+                                   iv_message_v4 = sy-msgv4
+                          CHANGING ct_msg        = gt_msg ).
+            ENDIF.
+
+            IF <fs_data>-waers IS INITIAL.
+              MESSAGE s008(zfibl002gap039_bte) WITH TEXT-008. "WAERS
+              build_msg( EXPORTING iv_id         = sy-msgid
+                                   iv_number     = sy-msgno
+                                   iv_type       = gc_e
+                                   iv_message_v1 = sy-msgv1
+                                   iv_message_v2 = sy-msgv2
+                                   iv_message_v3 = sy-msgv3
+                                   iv_message_v4 = sy-msgv4
+                          CHANGING ct_msg        = gt_msg ).
+            ENDIF.
+
+            IF <fs_data>-stcd1 IS INITIAL.
+              MESSAGE s008(zfibl002gap039_bte) WITH TEXT-009. "STCD1
+              build_msg( EXPORTING iv_id         = sy-msgid
+                                   iv_number     = sy-msgno
+                                   iv_type       = gc_e
+                                   iv_message_v1 = sy-msgv1
+                                   iv_message_v2 = sy-msgv2
+                                   iv_message_v3 = sy-msgv3
+                                   iv_message_v4 = sy-msgv4
+                          CHANGING ct_msg        = gt_msg ).
+            ELSE.
+
+              TRY .
+                  DATA(ls_retencion) = lt_retencion[ idnumber = <fs_data>-stcd1 ].
+                CATCH cx_sy_itab_line_not_found INTO DATA(lo_line).
+                  MESSAGE s014(zfibl002gap039_bte) WITH <fs_data>-stcd1.
+                  " Proveedor & sin datos de retención
+                  build_msg( EXPORTING iv_id         = sy-msgid
+                                       iv_number     = sy-msgno
+                                       iv_type       = gc_e
+                                       iv_message_v1 = sy-msgv1
+                                       iv_message_v2 = sy-msgv2
+                                       iv_message_v3 = sy-msgv3
+                                       iv_message_v4 = sy-msgv4
+                              CHANGING ct_msg        = gt_msg ).
+
+              ENDTRY.
+
+            ENDIF.
+
+            IF <fs_data>-dzterm IS INITIAL.
+              MESSAGE s008(zfibl002gap039_bte) WITH TEXT-010. "DZTERM
+              build_msg( EXPORTING iv_id         = sy-msgid
+                                   iv_number     = sy-msgno
+                                   iv_type       = gc_e
+                                   iv_message_v1 = sy-msgv1
+                                   iv_message_v2 = sy-msgv2
+                                   iv_message_v3 = sy-msgv3
+                                   iv_message_v4 = sy-msgv4
+                          CHANGING ct_msg        = gt_msg ).
+            ENDIF.
+
+            IF <fs_data>-importe_p IS INITIAL.
+              MESSAGE s008(zfibl002gap039_bte) WITH TEXT-011. "IMPORTE_P
+              build_msg( EXPORTING iv_id         = sy-msgid
+                                   iv_number     = sy-msgno
+                                   iv_type       = gc_e
+                                   iv_message_v1 = sy-msgv1
+                                   iv_message_v2 = sy-msgv2
+                                   iv_message_v3 = sy-msgv3
+                                   iv_message_v4 = sy-msgv4
+                          CHANGING ct_msg        = gt_msg ).
+            ENDIF.
+
+            IF <fs_data>-zlsch IS INITIAL.
+              MESSAGE s008(zfibl002gap039_bte) WITH TEXT-012. "ZLSCH
+              build_msg( EXPORTING iv_id         = sy-msgid
+                                   iv_number     = sy-msgno
+                                   iv_type       = gc_e
+                                   iv_message_v1 = sy-msgv1
+                                   iv_message_v2 = sy-msgv2
+                                   iv_message_v3 = sy-msgv3
+                                   iv_message_v4 = sy-msgv4
+                          CHANGING ct_msg        = gt_msg ).
+            ENDIF.
+
+            IF <fs_data>-hbkid IS INITIAL.
+              MESSAGE s008(zfibl002gap039_bte) WITH TEXT-013. "HBKID
+              build_msg( EXPORTING iv_id         = sy-msgid
+                                   iv_number     = sy-msgno
+                                   iv_type       = gc_e
+                                   iv_message_v1 = sy-msgv1
+                                   iv_message_v2 = sy-msgv2
+                                   iv_message_v3 = sy-msgv3
+                                   iv_message_v4 = sy-msgv4
+                          CHANGING ct_msg        = gt_msg ).
+            ENDIF.
+
+            IF <fs_data>-hktid IS INITIAL.
+              MESSAGE s008(zfibl002gap039_bte) WITH TEXT-014. "HKTID
+              build_msg( EXPORTING iv_id         = sy-msgid
+                                   iv_number     = sy-msgno
+                                   iv_type       = gc_e
+                                   iv_message_v1 = sy-msgv1
+                                   iv_message_v2 = sy-msgv2
+                                   iv_message_v3 = sy-msgv3
+                                   iv_message_v4 = sy-msgv4
+                          CHANGING ct_msg        = gt_msg ).
+            ENDIF.
+
+*            IF <fs_data>-zuonr IS INITIAL.
+*              MESSAGE e008(zfibl002gap039_bte) WITH TEXT-015. "ZUONR
+*            ENDIF.
+
+          WHEN 'D'. " Posición
+
+            IF <fs_data>-hkont IS INITIAL.
+              MESSAGE s008(zfibl002gap039_bte) WITH TEXT-016. "HKONT
+              build_msg( EXPORTING iv_id         = sy-msgid
+                                   iv_number     = sy-msgno
+                                   iv_type       = gc_e
+                                   iv_message_v1 = sy-msgv1
+                                   iv_message_v2 = sy-msgv2
+                                   iv_message_v3 = sy-msgv3
+                                   iv_message_v4 = sy-msgv4
+                          CHANGING ct_msg        = gt_msg ).
+            ENDIF.
+
+            IF <fs_data>-witht IS INITIAL.
+              MESSAGE s008(zfibl002gap039_bte) WITH TEXT-017. "WITHT
+              build_msg( EXPORTING iv_id         = sy-msgid
+                                   iv_number     = sy-msgno
+                                   iv_type       = gc_e
+                                   iv_message_v1 = sy-msgv1
+                                   iv_message_v2 = sy-msgv2
+                                   iv_message_v3 = sy-msgv3
+                                   iv_message_v4 = sy-msgv4
+                          CHANGING ct_msg        = gt_msg ).
+            ENDIF.
+
+            IF <fs_data>-wt_withcd IS INITIAL.
+              MESSAGE s008(zfibl002gap039_bte) WITH TEXT-018. "WT_WITHCD
+              build_msg( EXPORTING iv_id         = sy-msgid
+                                   iv_number     = sy-msgno
+                                   iv_type       = gc_e
+                                   iv_message_v1 = sy-msgv1
+                                   iv_message_v2 = sy-msgv2
+                                   iv_message_v3 = sy-msgv3
+                                   iv_message_v4 = sy-msgv4
+                          CHANGING ct_msg        = gt_msg ).
+            ENDIF.
+
+            IF <fs_data>-importe_b IS INITIAL.
+              MESSAGE s008(zfibl002gap039_bte) WITH TEXT-019. "IMPORTE_B
+              build_msg( EXPORTING iv_id         = sy-msgid
+                                   iv_number     = sy-msgno
+                                   iv_type       = gc_e
+                                   iv_message_v1 = sy-msgv1
+                                   iv_message_v2 = sy-msgv2
+                                   iv_message_v3 = sy-msgv3
+                                   iv_message_v4 = sy-msgv4
+                          CHANGING ct_msg        = gt_msg ).
+            ENDIF.
+
+            IF <fs_data>-importe_r IS INITIAL.
+              MESSAGE s008(zfibl002gap039_bte) WITH TEXT-020. "IMPORTE_R
+              build_msg( EXPORTING iv_id         = sy-msgid
+                                   iv_number     = sy-msgno
+                                   iv_type       = gc_e
+                                   iv_message_v1 = sy-msgv1
+                                   iv_message_v2 = sy-msgv2
+                                   iv_message_v3 = sy-msgv3
+                                   iv_message_v4 = sy-msgv4
+                          CHANGING ct_msg        = gt_msg ).
+            ENDIF.
+
+            IF <fs_data>-kostl IS NOT INITIAL.                "KOSTL
+
+              TRY .
+                  DATA(ls_ceco) = lt_ceco[ kostl = <fs_data>-kostl ].
+
+                  IF ls_ceco-gsber IS NOT INITIAL AND ls_ceco-gsber NE lv_gsber.
+                    MESSAGE s016(zfibl002gap039_bte) WITH <fs_data>-kostl lv_gsber.
+                    " CECO & no pertenece a la división &
+                    build_msg( EXPORTING iv_id         = sy-msgid
+                                         iv_number     = sy-msgno
+                                         iv_type       = gc_e
+                                         iv_message_v1 = sy-msgv1
+                                         iv_message_v2 = sy-msgv2
+                                         iv_message_v3 = sy-msgv3
+                                         iv_message_v4 = sy-msgv4
+                                CHANGING ct_msg        = gt_msg ).
+                  ENDIF.
+
+                CATCH cx_sy_itab_line_not_found INTO lo_line.
+                  MESSAGE s011(zfibl002gap039_bte) WITH <fs_data>-kostl.
+                  "El centro de costo & no es válido
+                  build_msg( EXPORTING iv_id         = sy-msgid
+                                       iv_number     = sy-msgno
+                                       iv_type       = gc_e
+                                       iv_message_v1 = sy-msgv1
+                                       iv_message_v2 = sy-msgv2
+                                       iv_message_v3 = sy-msgv3
+                                       iv_message_v4 = sy-msgv4
+                              CHANGING ct_msg        = gt_msg ).
+              ENDTRY.
+
+            ENDIF.
+
+            IF <fs_data>-aufnr IS NOT INITIAL.                "AUFNR
+
+              TRY .
+                  DATA(ls_orden) = lt_orden[ aufnr = <fs_data>-aufnr ].
+
+                  IF ls_orden-gsber IS NOT INITIAL AND ls_orden-gsber NE lv_gsber.
+                    MESSAGE s015(zfibl002gap039_bte) WITH <fs_data>-aufnr <fs_data>-gsber.
+                    " Orden & no pertenece a la división &
+                    build_msg( EXPORTING iv_id         = sy-msgid
+                                         iv_number     = sy-msgno
+                                         iv_type       = gc_e
+                                         iv_message_v1 = sy-msgv1
+                                         iv_message_v2 = sy-msgv2
+                                         iv_message_v3 = sy-msgv3
+                                         iv_message_v4 = sy-msgv4
+                                CHANGING ct_msg        = gt_msg ).
+                  ENDIF.
+
+                CATCH cx_sy_itab_line_not_found INTO lo_line.
+                  MESSAGE s012(zfibl002gap039_bte) WITH <fs_data>-aufnr.
+                  "El centro de costo & no es válido
+                  build_msg( EXPORTING iv_id         = sy-msgid
+                                       iv_number     = sy-msgno
+                                       iv_type       = gc_e
+                                       iv_message_v1 = sy-msgv1
+                                       iv_message_v2 = sy-msgv2
+                                       iv_message_v3 = sy-msgv3
+                                       iv_message_v4 = sy-msgv4
+                              CHANGING ct_msg        = gt_msg ).
+              ENDTRY.
+
+            ENDIF.
+
+            IF <fs_data>-prctr IS NOT INITIAL.                "PRCTR
+
+              TRY .
+                  DATA(ls_pep) = lt_pep[ pspnr = <fs_data>-prctr ].
+
+                  IF ls_pep-pgsbr IS NOT INITIAL AND ls_pep-pgsbr NE lv_gsber.
+                    MESSAGE s017(zfibl002gap039_bte) WITH <fs_data>-prctr <fs_data>-gsber.
+                    " Elem.Pep & no pertenece a la división &
+                    build_msg( EXPORTING iv_id         = sy-msgid
+                                         iv_number     = sy-msgno
+                                         iv_type       = gc_e
+                                         iv_message_v1 = sy-msgv1
+                                         iv_message_v2 = sy-msgv2
+                                         iv_message_v3 = sy-msgv3
+                                         iv_message_v4 = sy-msgv4
+                                CHANGING ct_msg        = gt_msg ).
+                  ENDIF.
+
+                CATCH cx_sy_itab_line_not_found INTO lo_line.
+                  MESSAGE s013(zfibl002gap039_bte) WITH <fs_data>-prctr.
+                  "El elemento pep & no es válido
+                  build_msg( EXPORTING iv_id         = sy-msgid
+                                       iv_number     = sy-msgno
+                                       iv_type       = gc_e
+                                       iv_message_v1 = sy-msgv1
+                                       iv_message_v2 = sy-msgv2
+                                       iv_message_v3 = sy-msgv3
+                                       iv_message_v4 = sy-msgv4
+                              CHANGING ct_msg        = gt_msg ).
+              ENDTRY.
+
+            ENDIF.
+
+            IF <fs_data>-geber IS INITIAL.
+              MESSAGE s008(zfibl002gap039_bte) WITH TEXT-024. "GEBER
+              build_msg( EXPORTING iv_id         = sy-msgid
+                                   iv_number     = sy-msgno
+                                   iv_type       = gc_e
+                                   iv_message_v1 = sy-msgv1
+                                   iv_message_v2 = sy-msgv2
+                                   iv_message_v3 = sy-msgv3
+                                   iv_message_v4 = sy-msgv4
+                          CHANGING ct_msg        = gt_msg ).
+            ENDIF.
+
+            IF <fs_data>-sgtxt IS INITIAL.
+              MESSAGE s008(zfibl002gap039_bte) WITH TEXT-025. "SGTXT
+              build_msg( EXPORTING iv_id         = sy-msgid
+                                   iv_number     = sy-msgno
+                                   iv_type       = gc_e
+                                   iv_message_v1 = sy-msgv1
+                                   iv_message_v2 = sy-msgv2
+                                   iv_message_v3 = sy-msgv3
+                                   iv_message_v4 = sy-msgv4
+                          CHANGING ct_msg        = gt_msg ).
+            ENDIF.
+
+          WHEN OTHERS.
+
+        ENDCASE.
+
+      ENDIF.
+
+    ENDLOOP.
+
+  ENDMETHOD. " validate_data.
+
+  METHOD bapi_document_post.
+
+    DATA: ls_documentheader TYPE bapiache09,
+          lv_obj_type       TYPE bapiache09-obj_type,
+          lv_obj_key        TYPE bapiache09-obj_key,
+          lv_obj_sys        TYPE bapiache09-obj_sys,
+          lt_accountpayable TYPE STANDARD TABLE OF bapiacap09,
+          lt_accountgl      TYPE STANDARD TABLE OF bapiacgl09,
+          lt_currencyamount TYPE STANDARD TABLE OF bapiaccr09,
+          lt_accountwt      TYPE STANDARD TABLE OF bapiacwt09,
+          lt_return         TYPE STANDARD TABLE OF bapiret2,
+          lv_posnr          TYPE posnr_acc,
+          ls_doc_header     TYPE ty_records.
+
+*----------------------------------------------------------------------*
+
+*   Obtiene parametros
+    get_param( IMPORTING es_param = DATA(ls_param) ).
+
+*   Obtenemos el proveedor
+    SELECT a~partner,
+           a~type,
+           a~idnumber,
+           b~lifnr
+      FROM but0id AS a
+      INNER JOIN lfb1 AS b
+      ON b~lifnr EQ a~partner
+      FOR ALL ENTRIES IN @gt_records
+      WHERE ( a~idnumber EQ @gt_records-stcd1 )
+        AND ( a~type     EQ @text-030
+         OR   a~type     EQ @text-031 )
+        AND ( b~bukrs    EQ @gt_records-bukrs )
+        AND ( b~loevm    EQ @abap_false )
+        AND ( b~sperr    EQ @abap_false )
+        AND ( b~nodel    EQ @abap_false )
+      INTO TABLE @DATA(lt_bp).                "#EC CI_FAE_LINES_ENSURED
+
+*   Se asigna clave por cada documento
+    PERFORM determinate_key USING gt_records.
+
+*   [ Armamos datos de la BAPI]
+    LOOP AT gt_records ASSIGNING FIELD-SYMBOL(<fs_records>).
+
+      AT NEW clave. " clave documento
+
+        IF <fs_records>-tireg EQ 'C'. "cab doc
+
+*         Header
+          PERFORM complete_header USING <fs_records> CHANGING ls_documentheader.
+
+          TRY .
+              DATA(ls_bp) = lt_bp[ idnumber = <fs_records>-stcd1 ].
+            CATCH cx_sy_itab_line_not_found INTO DATA(lo_line).
+          ENDTRY.
+
+          CLEAR: ls_doc_header.
+          ls_doc_header = CORRESPONDING #( <fs_records> ).
+          DATA(lv_stcd1) = ls_doc_header-stcd1.
+
+        ENDIF.
+
+      ENDAT.
+
+      IF <fs_records>-tireg EQ 'D'. "pos doc
+
+        ADD 1 TO lv_posnr.
+
+        IF lv_posnr EQ '1'.
+
+*         Accountpayable
+          APPEND INITIAL LINE TO lt_accountpayable ASSIGNING FIELD-SYMBOL(<fs_accountpayable>).
+          PERFORM complete_accountpayable USING <fs_records>
+                                                ls_param
+                                                ls_bp-lifnr
+                                                lv_posnr
+                                                ls_doc_header
+                                       CHANGING <fs_accountpayable>.
+
+*         Accountwt
+          APPEND INITIAL LINE TO lt_accountwt ASSIGNING FIELD-SYMBOL(<fs_accountwt>).
+          PERFORM complete_accountwt USING <fs_records>
+                                           lv_posnr
+                                           <fs_accountwt>.
+
+        ENDIF.
+
+        IF lv_posnr >= '1'.
+
+*         Accountgl
+          APPEND INITIAL LINE TO lt_accountgl ASSIGNING FIELD-SYMBOL(<fs_accountgl>).
+          PERFORM complete_accountgl USING <fs_records>
+                                           lv_posnr
+                                           ls_doc_header
+                                  CHANGING <fs_accountgl>.
+
+*         Currencyamount - Importes según posición
+          APPEND INITIAL LINE TO lt_currencyamount ASSIGNING FIELD-SYMBOL(<fs_currencyamount>).
+          PERFORM complete_currencyamount USING <fs_records>
+                                                lv_posnr
+                                                ls_param
+                                       CHANGING <fs_currencyamount>.
+        ENDIF.
+
+      ENDIF.
+
+      AT END OF clave. " Ultima posición del documento
+
+*       Obtenemos el total de los importes
+        DATA(lv_importe) = REDUCE dmbtr( INIT lv_sum TYPE dmbtr
+                                         FOR ls_currencyamount IN lt_currencyamount
+                                         NEXT lv_sum = lv_sum + ls_currencyamount-amt_doccur ).
+
+*       Currencyamount - Importe bruto negativo
+        APPEND INITIAL LINE TO lt_currencyamount ASSIGNING <fs_currencyamount>.
+        PERFORM complete_currencyamount_neg USING lv_importe
+                                                  ls_param
+                                         CHANGING <fs_currencyamount>.
+
+        SORT lt_currencyamount BY itemno_acc ASCENDING.
+
+*       Se ejecuta BAPI
+        CALL FUNCTION 'BAPI_ACC_DOCUMENT_POST'
+          EXPORTING
+            documentheader = ls_documentheader
+          IMPORTING
+            obj_type       = lv_obj_type
+            obj_key        = lv_obj_key
+            obj_sys        = lv_obj_sys
+          TABLES
+            accountgl      = lt_accountgl
+            accountpayable = lt_accountpayable
+            currencyamount = lt_currencyamount
+            return         = lt_return
+            accountwt      = lt_accountwt.
+
+        LOOP AT lt_return ASSIGNING FIELD-SYMBOL(<fs_return>).
+
+          CASE <fs_return>-type.
+            WHEN 'E'.
+              CALL FUNCTION 'BAPI_TRANSACTION_ROLLBACK'.
+              PERFORM complete_log USING <fs_return> lv_obj_key lv_stcd1 CHANGING gt_log.
+            WHEN 'S'.
+              " Grabación física del documento contable
+              CALL FUNCTION 'BAPI_TRANSACTION_COMMIT'
+                EXPORTING
+                  wait = abap_true.
+              PERFORM complete_log USING <fs_return> lv_obj_key lv_stcd1 CHANGING gt_log.
+            WHEN OTHERS.
+          ENDCASE.
+
+        ENDLOOP.
+
+        CLEAR: ls_documentheader,
+               lv_obj_type,
+               lv_obj_key,
+               lv_obj_sys,
+               lv_posnr,
+               lv_stcd1.
+
+        REFRESH: lt_accountgl,
+                 lt_accountpayable,
+                 lt_currencyamount,
+                 lt_return,
+                 lt_accountwt.
+
+      ENDAT.
+
+    ENDLOOP.
+
+  ENDMETHOD. " bapi_document_post
+
+  METHOD get_param.
+
+    SELECT SINGLE programid,
+                  bukrs,
+                  waers,
+                  hkont,
+                  zterm,
+                  blart
+      FROM zfibl_param_bte
+      INTO CORRESPONDING FIELDS OF @es_param
+      WHERE programid EQ @sy-repid
+        AND bukrs     EQ @p_bukrs.
+    IF es_param IS INITIAL.
+      MESSAGE e009(zfibl002gap039_bte).
+      " La tabla de parámetros ZFIBL_PARAM_BTE está vacía
+    ENDIF.
+
+  ENDMETHOD. " get_param
+
+  METHOD drill_down.
+
+    IF is_row-belnr IS NOT INITIAL.
+
+      SET PARAMETER ID: 'BLN' FIELD is_row-belnr,
+                        'BUK' FIELD is_row-bukrs,
+                        'GJR' FIELD is_row-gjahr.
+      CALL TRANSACTION 'FB03' WITH AUTHORITY-CHECK AND SKIP FIRST SCREEN ##AUTH_ERR_HANDLER_MISSING. "#EC CI_CALLTA
+
+    ENDIF.
+
+  ENDMETHOD. " drill_down
+
+  METHOD display_errors.
+
+    CALL FUNCTION 'WPM_OTM_PPO_BAPIRET2_SHOW'
+      TABLES
+        i_bapiret2_tab = it_msg.
+
+  ENDMETHOD. " display_errors
+
+  METHOD build_msg.
+
+    APPEND INITIAL LINE TO ct_msg ASSIGNING FIELD-SYMBOL(<fs_error>).
+    <fs_error> = VALUE #( id         = iv_id
+                          number     = iv_number
+                          type       = iv_type
+                          message_v1 = iv_message_v1
+                          message_v2 = iv_message_v2
+                          message_v3 = iv_message_v3
+                          message_v4 = iv_message_v4 ).
+
+  ENDMETHOD. " build_msg
+
+ENDCLASS.
+
+*----------------------------------------------------------------------*
+*       CLASS lcl_event_handler IMPLEMENTATION
+*----------------------------------------------------------------------*
+*       (DTT_FNAVARRO)
+*----------------------------------------------------------------------*
+CLASS lcl_event_handler IMPLEMENTATION.
+
+  METHOD on_link_click.
+
+    IF lcl_eti=>gt_log IS NOT INITIAL.
+
+      TRY .
+          DATA(ls_log) = lcl_eti=>gt_log[ row ].
+
+          CASE column.
+            WHEN 'BELNR'.
+              lcl_eti=>drill_down( is_row = ls_log ).
+            WHEN OTHERS.
+          ENDCASE.
+
+        CATCH cx_sy_itab_line_not_found INTO DATA(ol_line).
+      ENDTRY.
+
+    ENDIF.
+
+  ENDMETHOD. " on_link_click
+
+ENDCLASS.
